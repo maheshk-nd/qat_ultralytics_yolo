@@ -1,0 +1,146 @@
+# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+# PASCAL VOC dataset http://host.robots.ox.ac.uk/pascal/VOC by University of Oxford
+# Example usage: python train.py --data VOC.yaml
+# parent
+# ├── yolov5
+# └── datasets
+#     └── VOC  ← downloads here (2.8 GB)
+
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+#path: /data/object/TrafficLightsUS/tralius_2022_09_09 #../datasets/VOC
+# path: /data/workspace/labeledData/india_2023_11_12_v2 #../datasets/VOC
+# path:  /data/manikantam/datasets/VOC/images/temp/
+# path:  /data/workspace/labeledData/dbml_2023_12_20
+# train: # train images (relative to 'path')  16551 images
+#   - images/train2022
+# val: # val images (relative to 'path')  4952 images
+#   - images/test2022
+# test: # test images (optional)
+#   - images/test2022
+
+#path:  /data/object/kepler_data/unified_usuk
+path:  /home/ubuntu/mahesh/sample-data
+#path:  /data/manikantam/workspace/tycho_tralius_dbml_symlinks_2024_01_12_v6
+train: # train images (relative to 'path')  16551 images
+  - images/train2024
+val: # val images (relative to 'path')  4952 images
+  - images/val2024
+test: # test images (optional)
+  - images/test2024
+
+
+
+names:
+  0: CAR
+  1: TRUCK
+  2: TRAFFIC_LIGHTS
+  3: TRAFFIC_SIGN
+  4: PEDESTRIAN
+  5: CAR_FRONT
+  6: TRUCK_FRONT
+  7: ROAD_INFORMATION_SIGN
+  8: ROAD_MARKING
+  9: FIRE_HYDRANT
+  10: CONSTRUCTION_CONES
+  11: LICENSE_PLATE
+  12: TWO_WHEELER
+  13: OTHER
+
+
+# Download script/URL (optional) ---------------------------------------------------------------------------------------
+download: |
+  import xml.etree.ElementTree as ET
+
+  from tqdm import tqdm
+  from utils.general import download, Path
+
+
+  def convert_label(path, lb_path, year, image_id):
+      def convert_box(size, box):
+          dw, dh = 1. / size[0], 1. / size[1]
+          x, y, w, h = (box[0] + box[1]) / 2.0 - 1, (box[2] + box[3]) / 2.0 - 1, box[1] - box[0], box[3] - box[2]
+          return x * dw, y * dh, w * dw, h * dh
+
+      in_file = open(path / f'Annotations/{image_id}.xml')
+      out_file = open(lb_path, 'w')
+      tree = ET.parse(in_file)
+      root = tree.getroot()
+      size = root.find('size')
+      w = int(size.find('width').text)
+      h = int(size.find('height').text)
+
+      GT_LABEL_MAP = {
+            "ROAD_INFORMATION_SIGNS": "ROAD_INFORMATION_SIGN",
+            "PEDESTRIAN_WALK_SIGN": "TRAFFIC_SIGN",
+            "PEDESTRIAN_WALK_SIGNS": "TRAFFIC_SIGN",
+            "ROAD_INFORMATION_SIGN": "ROAD_INFORMATION_SIGN",
+            "SIGN_ROAD": "ROAD_INFORMATION_SIGN",
+            "STOP_SIGN": "TRAFFIC_SIGN",
+            "RAIL_ROAD_CROSSING": "TRAFFIC_SIGN",
+            "SPEED_LIMIT_SIGN": "TRAFFIC_SIGN",
+            "TWO_WHEELER": "TWO_WHEELER",
+            "TWO_WHEELERS": "TWO_WHEELER",
+            "BICYCLE" : "TWO_WHEELER",
+            "SIGN_STOP": "TRAFFIC_SIGN",
+            "SIGN_SPEED_LIMIT": "TRAFFIC_SIGN",
+            "SIGN_PED_XWALK_MRK": "TRAFFIC_SIGN",
+            "SIGN_NO_PARK": "TRAFFIC_SIGN",
+            "SIGN_DIP": "TRAFFIC_SIGN",
+            "SIGN_BIKE_ROUTE": "TRAFFIC_SIGN",
+            "SIGN_BUS_STOP": "TRAFFIC_SIGN",
+            "SIGN_BIKE_WARN": "TRAFFIC_SIGN",
+            "TRAFFIC_LIGHT": "TRAFFIC_LIGHTS",
+            "RM_PED": "ROAD_MARKING",
+            "RM_XING": "ROAD_MARKING",
+            "RM_BIKE": "ROAD_MARKING",
+            "RM_STOP": "ROAD_MARKING",
+            "RM_DIP": "ROAD_MARKING",
+            "RM_XWALK": "ROAD_MARKING",
+            "MISC_FIRE_HYDRANT": "FIRE_HYDRANT",
+            "ROAD_LED_DISPLAY": "ROAD_INFORMATION_SIGN",
+            "GROUP_PEDESTRIANS": "PEDESTRIAN",
+            "STREET_LIGHT": "OTHER",
+            "ANIMALS": "OTHER",
+            "GROUP_ANIMALS": "OTHER",
+            "GENERAL_OBSTACLES": "OTHER",
+            "AUTO": "CAR",
+            "AUTO_FRONT": "CAR_FRONT",
+            "ROAD_SIGNS": "TRAFFIC_SIGN",
+            "LICENSE_PLATE": "LICENSE_PLATE",
+            "CAR": "CAR",
+            "CAR_FRONT": "CAR_FRONT",
+            "TRUCK": "TRUCK",
+            "TRUCK_FRONT": "TRUCK_FRONT",
+            "CONSTRUCTION_CONES": "CONSTRUCTION_CONES",
+            "CONSTRUCTION_CONE": "CONSTRUCTION_CONES",
+            # "PERSON": "PEDESTRIAN",
+        }
+      names = list(yaml['names'].values())  # names list
+      for obj in root.iter('object'):
+          cls = obj.find('name').text
+          cls = cls.upper()
+          cls = GT_LABEL_MAP.get(cls, cls)
+          if cls in names and int(obj.find('difficult').text) != 1:
+              xmlbox = obj.find('bndbox')
+              bb = convert_box((w, h), [float(xmlbox.find(x).text) for x in ('xmin', 'xmax', 'ymin', 'ymax')])
+              cls_id = names.index(cls)  # class id
+
+              out_file.write(" ".join([str(a) for a in (cls_id, *bb)]) + '\n')
+  dir = Path(yaml['path'])  # dataset root dir
+  path = dir # dir / 'images/VOCdevkit'
+  for year, image_set in ('2024', 'train'), ('2024', 'val'), ('2024', 'test'):
+      imgs_path = dir / 'images' / f'{image_set}{year}'
+      lbs_path = dir / 'labels' / f'{image_set}{year}'
+      imgs_path.mkdir(exist_ok=True, parents=True)
+      lbs_path.mkdir(exist_ok=True, parents=True)
+
+      with open(path / f'ImageSets/Main/{image_set}.txt') as f:
+          image_ids = f.read().strip().split()
+      for id in tqdm(image_ids, desc=f'{image_set}{year}'):
+          f = path / f'JPEGImages/{id}.jpg'  # old img path
+          # if not f.exists():
+          #     f = path / f'JPEGImages/{id}.png'
+          lb_path = (lbs_path / f.name).with_suffix('.txt')  # new label path
+          f.rename(imgs_path / f.name)  # move image
+          convert_label(path, lb_path, year, id)  # convert labels to YOLO format
